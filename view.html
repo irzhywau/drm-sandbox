@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>DRM Playback with dash.js</title>
+        <script src="/dash.js"></script>
+    </head>
+    <body>
+        <video 
+            id="html5video" 
+            width="100%" 
+            height="100%"
+            autoplay
+            controls
+        ></video>
+    </body>
+    <script>
+        window.HELP_IMPROVE_VIDEOJS = false;
+        String.prototype.hexEncode = function(){
+            var hex, i;
+
+            var result = "";
+            for (i=0; i<this.length; i++) {
+                hex = this.charCodeAt(i).toString(16);
+                result += ("000"+hex).slice(-4);
+            }
+
+            return result
+        }
+
+        String.prototype.hexDecode = function(){
+            var j;
+            var hexes = this.match(/.{1,4}/g) || [];
+            var back = "";
+            for(j = 0; j<hexes.length; j++) {
+                back += String.fromCharCode(parseInt(hexes[j], 16));
+            }
+
+            return back;
+        }
+
+        var expectedEncryptedEvents = 2;
+        var html5video = document.getElementById("html5video");
+
+        function initMediaKeySystem () {
+            // 'org.w3.clearkey' is used to identify Clear Key system
+            // use 'com.widevine.alpha' as keySystem if its 'widevine'
+            var config = [{
+                initDataTypes: ['cenc'],
+                videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.640029"' }],
+                audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"' }]
+            }];
+            
+            navigator.requestMediaKeySystemAccess('org.w3.clearkey', config).then(
+                function (keySystemAccess) {
+                    var promise = keySystemAccess.createMediaKeys();
+                    
+                    promise.catch(
+                        function (error) {
+                            console.error("Unable to create MediaKeys : " + error);
+                        }
+                    );
+                    
+                    promise.then(
+                        function (createdMediaKeys) {
+                            return html5video.setMediaKeys(createdMediaKeys);
+                        }
+                    ).then(
+                        function (mediaKeys) {
+                            console.log("Successfully set MediaKeys on video object");
+                        }
+                    ).catch(
+                        function (error) {
+                            console.error("Unable to set MediaKeys on " + "video object : " + error);
+                        }
+                    );
+
+                    return promise;
+                }
+            ).catch(
+                function (error) {
+                    console.error("Error while" + "initializing media key system : " + error);
+                }
+            );
+        }
+
+        function handleEncrypted(event) {
+            var mediaKeys = html5video.mediaKeys;
+            //fail the test if the mediaKeys were not set on html5video
+            if (mediaKeys === null || mediaKeys === undefined) {
+                console.error("MediaKeys set on html5video is " + mediaKeys);
+            }
+            // create and initialize session
+            var keySession = mediaKeys.createSession();
+            try {
+                keySession.addEventListener("message", handleMessage, false);
+            } catch (err) {
+                console.error("Unable to add 'message' " + "event listener to the keySession object. Error: " + err.message);
+            }
+            
+            var promise = keySession.generateRequest(event.initDataType, event.initData)
+            promise.catch(
+                function (error) {
+                    console.error("Unable to create or " + "initialize key session. Error : " + error);
+                }
+            );
+        }
+        
+        function handleMessage(event) {
+            var keySession = event.target;
+            /*
+                For any other key system (eg: widevine), application has to make 
+                network request here to get the license which is then updated for the session.
+                Since we already know the license format for Clear Key from the specification 
+                https://www.w3.org/TR/encrypted-media/#clear-key-license-format and also the keys 
+                used to encrypt the media, we are hard coding the license here.
+            */
+            var te = new TextEncoder();
+            var license = te.encode('{"keys":[{"kty":"oct","k":"hyN9IKGfWKdAwFaE5pm0qg","kid":"oW5AK5BW43HzbTSKpiu3SQ"}],"type":"temporary"}');
+            keySession.update(license).catch(
+                function (error) {
+                    console.error('Failed to update the session', error);
+                }
+            );
+        }
+        
+        function initWithProtection(html5video, url, protData, options = {}) {
+            var { filterLicenseRequest, filterLicenseResponse } = options;
+            var video,
+                player;
+
+            player = dashjs.MediaPlayer().create();
+            player.updateSettings({
+                debug: { 'logLevel': dashjs.Debug.LOG_LEVEL_DEBUG },
+                //protection: {
+                //    keepProtectionMediaKeys: true
+                //}
+            });
+
+            if (filterLicenseRequest) {
+                player.registerLicenseRequestFilter(filterLicenseRequest);
+            }
+
+            if (filterLicenseResponse) {
+                player.registerLicenseResponseFilter(filterLicenseResponse);
+            }
+
+            console.log({player, url, protData});
+
+            player.initialize(html5video, url, true);
+            player.setProtectionData(protData);
+            player.play();    
+        }
+
+        // var url = "http://localhost:8099/v/test-video.mp4";
+        // var url = "http://localhost:8099/o/free/stream.mpd";
+        // var url = "http://localhost:8099/o/clearkey/stream.mpd";
+        // var url = "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd";
+        function initFree() {
+            var url = "http://localhost:8099/o/free/stream.mpd";
+            var video,
+                player;
+
+            player = dashjs.MediaPlayer().create();
+            player.initialize(html5video, url, true);
+        }
+        
+        function initClearKey0() {
+            var url = "http://localhost:8099/o/clearkey-0/stream.mpd";
+            /*
+            https://github.com/Dash-Industry-Forum/dash.js/wiki/Generate-MPEG-DASH-content-encrypted-with-MPEG-CENC-ClearKey
+            kid: $ echo "A16E402B9056E371F36D348AA62BB749" | xxd -r -p | base64 -> oW5AK5BW43HzbTSKpiu3SQ==
+            key: $ echo "87237D20A19F58A740C05684E699B4AA" | xxd -r -p | base64 -> hyN9IKGfWKdAwFaE5pm0qg==
+            */
+
+            const protData = {
+                "org.w3.clearkey": {
+                    "clearkeys": {
+                        "oW5AK5BW43HzbTSKpiu3SQ": "hyN9IKGfWKdAwFaE5pm0qg"
+                    }
+                }
+            };
+
+            initWithProtection(html5video, url, protData);
+        }
+        function initClearKey1() {
+            var url = "http://localhost:8099/o/clearkey-1/stream.mpd";
+            /*
+
+            echo "key: $(uuidgen | sed -r 's#-##g')" && echo "kid: $(uuidgen | sed -r 's#-##g')"
+            key: 5E7287F31C8446F088847BE55A7A077F
+            kid: 5A906CF6C74D4C47A0BC2C981DC2C8F6
+
+            echo "Encrypting video..." && \
+            mp4encrypt --method MPEG-CENC \
+            --key 1:5E7287F31C8446F088847BE55A7A077F:random \
+            --property 1:KID:5A906CF6C74D4C47A0BC2C981DC2C8F6\
+            --global-option mpeg-cenc.eme-pssh:true \
+            f/test-video.mp4 f/test-video-1.mp4 && \
+            echo "Bundling MPD files..." && \
+            rm -Rf o/clearkey-1 && mp4dash -d -v -o o/clearkey-1 e/test-video-1.mp4
+            
+            echo "\"$(echo 5A906CF6C74D4C47A0BC2C981DC2C8F6 | xxd -r -p | base64 | sed -r 's#=##g')\":\"$(echo 5E7287F31C8446F088847BE55A7A077F | xxd -r -p | base64 | sed -r 's#=##g')\""
+
+            NOTE THAT stream.mpd file will not contains any protection information with this process
+            Instead, they are all injected in the media init segment
+
+            */
+            const protData = {
+                "org.w3.clearkey": {
+                    "clearkeys": {
+                        "WpBs9sdNTEegvCyYHcLI9g":"XnKH8xyERvCIhHvlWnoHfw"
+                    }
+                }
+            };
+
+            initWithProtection(html5video, url, protData);
+        }
+        function initClearKey2() {
+            var url = "http://localhost:8099/o/clearkey-2/stream.mpd";
+            /*
+
+            echo "key: $(uuidgen | sed -r 's#-##g')" && echo "kid: $(uuidgen | sed -r 's#-##g')"
+            key: 8A16B02BAAB94B49B37A2CC3D054518A
+            kid: A2E0B114A8024F869D6C9B47E4EDCA02
+
+            echo "Encrypting video and Bundling MDP file..." && \
+            rm -Rf o/clearkey-2 && mp4dash -v -d --clearkey --marlin \
+            --encryption-key=A2E0B114A8024F869D6C9B47E4EDCA02:8A16B02BAAB94B49B37A2CC3D054518A:random \
+            --use-segment-timeline \
+            --encryption-cenc-scheme=cenc \
+            --encryption-args="--global-option mpeg-cenc.eme-pssh:true" \
+            -o o/clearkey-2 f/test-video.mp4
+            
+            echo "\"$(echo A2E0B114A8024F869D6C9B47E4EDCA02 | xxd -r -p | base64 | sed -r 's#=##g')\":\"$(echo 8A16B02BAAB94B49B37A2CC3D054518A | xxd -r -p | base64 | sed -r 's#=##g')\""
+
+            */
+            const protData = {
+                "org.w3.clearkey": {
+                    "clearkeys": {
+                        "ouCxFKgCT4adbJtH5O3KAg":"ihawK6q5S0mzeizD0FRRig"
+                    },
+                    priority: 1
+                }
+            };
+
+            initWithProtection(html5video, url, protData);
+        }
+        function initClearKey3() {
+            var url = "http://localhost:8099/o/clearkey-3/stream.mpd";
+            /*
+
+            echo "key: $(uuidgen | sed -r 's#-##g')" && echo "kid: $(uuidgen | sed -r 's#-##g')"
+            key: 8A16B02BAAB94B49B37A2CC3D054518A
+            kid: A2E0B114A8024F869D6C9B47E4EDCA02
+
+            echo "Encrypting video and Bundling MDP file..." && \
+            rm -Rf o/clearkey-3 && mp4dash -v -d --clearkey --clearkey-license-uri=http://localhost:8090/acquirelicense/clearkey \
+            --encryption-key=A2E0B114A8024F869D6C9B47E4EDCA02:8A16B02BAAB94B49B37A2CC3D054518A:random \
+            --use-segment-timeline \
+            --encryption-cenc-scheme=cenc \
+            --encryption-args="--global-option mpeg-cenc.eme-pssh:true" \
+            -o o/clearkey-3 f/test-video.mp4
+            
+            echo "\"$(echo A2E0B114A8024F869D6C9B47E4EDCA02 | xxd -r -p | base64 | sed -r 's#=##g')\":\"$(echo 8A16B02BAAB94B49B37A2CC3D054518A | xxd -r -p | base64 | sed -r 's#=##g')\""
+
+            */
+            const protData = {
+                "org.w3.clearkey": {
+                    serverURL: "http://localhost:8090/acquirelicense/clearkey",
+                    priority: 0
+                }
+            };
+
+            initWithProtection(html5video, url, protData);
+        }
+        function initPlayready0() {
+            // ONLY ON MICROSOFT BROWSER
+            var url = "http://localhost:8099/o/playready-0/stream.mpd";
+            console.log('DRM Playready case', { url });
+            /*
+
+            curl http://localhost:8090/genkey
+            {
+                "key": "bDfTDIgbGuefRMCyVxWvNg==", // hex'6C37D30C881B1AE79F44C0B25715AF36'
+                "kid": "171E7392-D6CF-4755-986F-A11330659179"
+            }
+
+            we need to add "Playready Header Object (PRO)"
+            see https://www.bento4.com/developers/dash/encryption_and_drm/#playready-drm
+
+            echo "Encrypting video and Bundling MDP file (Playready)..." && \
+            rm -Rf o/playready-0 && mp4dash -v -d --playready \
+            --encryption-key=171E7392D6CF4755986FA11330659179:6C37D30C881B1AE79F44C0B25715AF36:random \
+            --use-segment-timeline \
+            --encryption-cenc-scheme=cenc \
+            --encryption-args="--global-option mpeg-cenc.eme-pssh:true --global-option mpeg-cenc.piff-compatible:true" \
+            --playready-header=LA_URL:http://localhost:8090/acquirelicense \
+            --playready-version=4.3 \
+            -o o/playready-0 f/test-video-2sec.mp4
+            
+            */
+            const protData = {
+                "com.microsoft.playready": {
+                    "serverURL": "http://localhost:8090/acquirelicense",
+                    "httpRequestHeaders": {
+                        //"X-AxDRM-Message": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImtleXMiOlt7ImlkIjoiMDg3Mjc4NmUtZjllNy00NjVmLWEzYTItNGU1YjBlZjhmYTQ1IiwiZW5jcnlwdGVkX2tleSI6IlB3NitlRVlOY3ZqWWJmc2gzWDNmbWc9PSJ9LHsiaWQiOiJjMTRmMDcwOS1mMmI5LTQ0MjctOTE2Yi02MWI1MjU4NjUwNmEiLCJlbmNyeXB0ZWRfa2V5IjoiLzErZk5paDM4bXFSdjR5Y1l6bnQvdz09In0seyJpZCI6IjhiMDI5ZTUxLWQ1NmEtNDRiZC05MTBmLWQ0YjVmZDkwZmJhMiIsImVuY3J5cHRlZF9rZXkiOiJrcTBKdVpFanBGTjhzYVRtdDU2ME9nPT0ifSx7ImlkIjoiMmQ2ZTkzODctNjBjYS00MTQ1LWFlYzItYzQwODM3YjRiMDI2IiwiZW5jcnlwdGVkX2tleSI6IlRjUlFlQld4RW9IT0tIcmFkNFNlVlE9PSJ9LHsiaWQiOiJkZTAyZjA3Zi1hMDk4LTRlZTAtYjU1Ni05MDdjMGQxN2ZiYmMiLCJlbmNyeXB0ZWRfa2V5IjoicG9lbmNTN0dnbWVHRmVvSjZQRUFUUT09In0seyJpZCI6IjkxNGU2OWY0LTBhYjMtNDUzNC05ZTlmLTk4NTM2MTVlMjZmNiIsImVuY3J5cHRlZF9rZXkiOiJlaUkvTXNsbHJRNHdDbFJUL0xObUNBPT0ifSx7ImlkIjoiZGE0NDQ1YzItZGI1ZS00OGVmLWIwOTYtM2VmMzQ3YjE2YzdmIiwiZW5jcnlwdGVkX2tleSI6IjJ3K3pkdnFycERWM3hSMGJKeTR1Z3c9PSJ9LHsiaWQiOiIyOWYwNWU4Zi1hMWFlLTQ2ZTQtODBlOS0yMmRjZDQ0Y2Q3YTEiLCJlbmNyeXB0ZWRfa2V5IjoiL3hsU0hweHdxdTNnby9nbHBtU2dhUT09In0seyJpZCI6IjY5ZmU3MDc3LWRhZGQtNGI1NS05NmNkLWMzZWRiMzk5MTg1MyIsImVuY3J5cHRlZF9rZXkiOiJ6dTZpdXpOMnBzaTBaU3hRaUFUa1JRPT0ifV19fQ.BXr93Et1krYMVs-CUnf7F3ywJWFRtxYdkR7Qn4w3-to"
+                    },
+                    "priority": 0
+                },
+            };
+
+            initWithProtection(html5video, url, protData);
+        }
+        function initWidevine0() {
+            // https://stackoverflow.com/questions/49509733/widevine-drm-body-request-payload
+            var url = "http://localhost:8099/o/widevine-0/stream.mpd";
+            console.log('DRM widevine case', { url });
+            /*
+
+            curl http://localhost:8090/genkey
+            {
+                "key": "bDfTDIgbGuefRMCyVxWvNg==", // hex'6C37D30C881B1AE79F44C0B25715AF36'
+                "kid": "171E7392-D6CF-4755-986F-A11330659179"
+            }
+
+            see https://www.bento4.com/developers/dash/encryption_and_drm/#widevine-drm
+
+            echo "Encrypting video and Bundling MDP file (Widevine)..." && \
+            rm -Rf o/widevine-0 && mp4dash -v -d --widevine \
+            --encryption-key=171E7392D6CF4755986FA11330659179:6C37D30C881B1AE79F44C0B25715AF36:random \
+            --use-segment-timeline \
+            --profiles='on-demand' \
+            --encryption-cenc-scheme=cenc \
+            --widevine-header provider:elacity_drm#content_id:2a \
+            --encryption-args="--global-option mpeg-cenc.eme-pssh:true --global-option mpeg-cenc.piff-compatible:true" \
+            -o o/widevine-0 f/test-video-2sec.mp4
+            
+            */
+            const protData = {
+                // <dashif:Authzurl>https://example.com/tenants/5341/authorize</dashif:Authzurl>
+                // <dashif:Laurl>http://localhost:8090/acquirelicense</dashif:Laurl>
+                "com.widevine.alpha": {
+                    // "serverURL": "http://localhost:8090/acquirelicense",
+                    "serverURL": "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+                    "httpRequestHeaders": {
+                        //"X-AxDRM-Message": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImZpcnN0X3BsYXlfZXhwaXJhdGlvbiI6NjAsInBsYXlyZWFkeSI6eyJyZWFsX3RpbWVfZXhwaXJhdGlvbiI6dHJ1ZX0sImtleXMiOlt7ImlkIjoiOWViNDA1MGQtZTQ0Yi00ODAyLTkzMmUtMjdkNzUwODNlMjY2IiwiZW5jcnlwdGVkX2tleSI6ImxLM09qSExZVzI0Y3Iya3RSNzRmbnc9PSJ9XX19.FAbIiPxX8BHi9RwfzD7Yn-wugU19ghrkBFKsaCPrZmU"
+                        "X-AxDRM-Message": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImZpcnN0X3BsYXlfZXhwaXJhdGlvbiI6NjAsInBsYXlyZWFkeSI6eyJyZWFsX3RpbWVfZXhwaXJhdGlvbiI6dHJ1ZX0sImtleXMiOlt7ImlkIjoiOWViNDA1MGQtZTQ0Yi00ODAyLTkzMmUtMjdkNzUwODNlMjY2IiwiZW5jcnlwdGVkX2tleSI6ImxLM09qSExZVzI0Y3Iya3RSNzRmbnc9PSJ9XX19.FAbIiPxX8BHi9RwfzD7Yn-wugU19ghrkBFKsaCPrZmU"
+                    },
+                    // "audioRobustness": "SW_SECURE_CRYPTO",
+                    // "videoRobustness": "HW_SECURE_ALL",
+                    "priority": 0
+                },
+            };
+
+            var filterLicenseRequest = function (request) {
+                console.log('LICENSE REQUEST', request);
+                /* Here you can modify/overwrite the licens request (url, headers, data...) */
+                return Promise.resolve();
+            }
+
+            var filterLicenseResponse = function (response) {
+                console.log('LICENSE RESPONSE', response);
+                /* Here you can modify/overwrite the license response */
+                return Promise.resolve();
+            }            
+
+            //initWithProtection(html5video, url, protData, { filterLicenseRequest, filterLicenseResponse });
+            initWithProtection(html5video, "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd", protData, { filterLicenseRequest, filterLicenseResponse });
+        }
+        function check() {
+            if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+                var out = 'This page has been loaded under http. This might result in the EME APIs not being available to the player and any DRM-protected content will fail to play. ' +
+                    'If you wish to test manifest URLs that require EME support, then <a href=\'https:' + window.location.href.substring(window.location.protocol.length) + '\'>reload this page under https</a>.'
+                var div = document.getElementById('http-warning');
+                div.innerHTML = out;
+                div.style.display = ''
+            }
+        }
+        (function(){document.body.onload = function(){check(); initWidevine0()}})()
+        //(function(){document.body.onload = function(){check(); initClearKey3()}})()
+    </script>
+</html>
