@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>DRM Playback with dash.js</title>
+        <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+        <script src="/dash.js"></script>
+    </head>
+    <body>
+        <video 
+            id="html5video" 
+            class="video-js vjs-defaylt-skin"
+            width="640" 
+            height="100%"
+            autoplay
+            controls 
+            data-setup='{"aspectRatio":"640:320"}' 
+        ></video>
+    </body>
+    <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-contrib-dash/5.1.1/videojs-dash.min.js"></script>
+    <script>
+        (function(){
+            var player = videojs('html5video', {
+                html5: {
+                    nativeCaptions: false
+                }
+            });
+            player.ready(function() {
+                player.src({
+                    src: 'http://localhost:8099/o/clearkey-2/stream.mpd',
+                    type: 'application/dash+xml',
+                    keySystemOptions: Object.entries({
+                        "org.w3.clearkey": {
+                            "clearkeys": {
+                                "ouCxFKgCT4adbJtH5O3KAg":"ihawK6q5S0mzeizD0FRRig"
+                            }
+                        }
+                    }).map(([name, options]) => ({ name, options }))
+                });
+
+                player.play();
+            });
+        })()
+    </script>
+</html>
