@@ -1,3 +1,40 @@
 curl 'https://drm-widevine-licensing.axtest.net/AcquireLicense' \
   -H 'x-axdrm-message: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImZpcnN0X3BsYXlfZXhwaXJhdGlvbiI6NjAsInBsYXlyZWFkeSI6eyJyZWFsX3RpbWVfZXhwaXJhdGlvbiI6dHJ1ZX0sImtleXMiOlt7ImlkIjoiOWViNDA1MGQtZTQ0Yi00ODAyLTkzMmUtMjdkNzUwODNlMjY2IiwiZW5jcnlwdGVkX2tleSI6ImxLM09qSExZVzI0Y3Iya3RSNzRmbnc9PSJ9XX19.FAbIiPxX8BHi9RwfzD7Yn-wugU19ghrkBFKsaCPrZmU' \
   --data-raw $'\u0008\u0004'
+
+curl -v -X POST \
+ -H 'Content-Type: application/json' \
+ -d '{"request": "ewogICJjb250ZW50X2lkIjogIlptdHFNMnhxWVZOa1ptRnNhM0l6YWc9PSIsCiAgInRyYWNrcyI6IFsKICAgIHsgInR5cGUiOiAiU0QiIH0sCiAgICB7ICJ0eXBlIjogIkhEIiB9LAogICAgeyAidHlwZSI6ICJBVURJTyIgfQogIF0sCiAgImRybV90eXBlcyI6IFsgIldJREVWSU5FIiBdLAogICJwb2xpY3kiOiAiIgp9Cg==", "signature": "kwVLL4xVh9mnlZlPqiEWN0E+FsvG0y+/oy451XXeIMo=", "signer": "widevine_test" }' \
+ http://license.uat.widevine.com/cenc/getcontentkey/widevine_test  
+
+
+
+----
+45F5E198D6944392B340A94B7516552E
+
+{
+  "content_id": "RfXhmNaUQ5KzQKlLdRZVLg==",
+  "tracks": [
+    { "type": "HD" },
+  ],
+  "drm_types": [ "WIDEVINE" ],
+  "policy": "default"
+}
+
+--> ewogICJjb250ZW50X2lkIjogIlJmWGhtTmFVUTVLelFLbExkUlpWTGc9PSIsCiAgInRyYWNrcyI6IFsKICAgIHsgInR5cGUiOiAiSEQiIH0sCiAgXSwKICAiZHJtX3R5cGVzIjogWyAiV0lERVZJTkUiIF0sCiAgInBvbGljeSI6ICIiCn0K
+
+la_server=
+base64_json=ewogICJjb250ZW50X2lkIjogIlptdHFNMnhxWVZOa1ptRnNhM0l6YWc9PSIsCiAgInRyYWNrcyI6IFsKICAgIHsgInR5cGUiOiAiU0QiIH0sCiAgICB7ICJ0eXBlIjogIkhEIiB9LAogICAgeyAidHlwZSI6ICJBVURJTyIgfQogIF0sCiAgImRybV90eXBlcyI6IFsgIldJREVWSU5FIiBdLAogICJwb2xpY3kiOiAiIgp9Cg==
+signature=kwVLL4xVh9mnlZlPqiEWN0E+FsvG0y+/oy451XXeIMo=
+
+curl -v POST \
+  -H 'Content-Type: application/json' \
+  -d '{"request": "ewogICJjb250ZW50X2lkIjogIlJmWGhtTmFVUTVLelFLbExkUlpWTGc9PSIsCiAgInRyYWNrcyI6IFsKICAgIHsgInR5cGUiOiAiSEQiIH0sCiAgXSwKICAiZHJtX3R5cGVzIjogWyAiV0lERVZJTkUiIF0sCiAgInBvbGljeSI6ICIiCn0K", "signature": "xo5gZid7MJ5Zena7CTufi5pv8bli34vh4/Aq1InQeRXxscDIQZUMPiig4zvHp9GH", "signer": "widevine_test" }' \
+  http://license.uat.widevine.com/cenc/getcontentkey/widevine_test | jq -r '.response' | base64 -d | jq
+
+pssh-box \
+ --human \
+ --system-id edef8ba979d64acea3c827dcd51d21ed \
+ --pssh-data 'AAAATXBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAC0SEBcec5LWz0dVmG+hEzBlkXkaDXdpZGV2aW5lX3Rlc3QiAiq+CAFI49yVmwY=' 
+
+---- 

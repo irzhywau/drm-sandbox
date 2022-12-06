@@ -224,7 +224,7 @@
             kid: A2E0B114A8024F869D6C9B47E4EDCA02
 
             echo "Encrypting video and Bundling MDP file..." && \
-            rm -Rf o/clearkey-2 && mp4dash -v -d --clearkey --marlin \
+            rm -Rf o/clearkey-2 && mp4dash -v -d --clearkey --marlin --playready --widevine \
             --encryption-key=A2E0B114A8024F869D6C9B47E4EDCA02:8A16B02BAAB94B49B37A2CC3D054518A:random \
             --use-segment-timeline \
             --encryption-cenc-scheme=cenc \
@@ -317,37 +317,42 @@
             console.log('DRM widevine case', { url });
             /*
 
-            curl http://localhost:8090/genkey
-            {
-                "key": "bDfTDIgbGuefRMCyVxWvNg==", // hex'6C37D30C881B1AE79F44C0B25715AF36'
-                "kid": "171E7392-D6CF-4755-986F-A11330659179"
-            }
+            https://shaka-project.github.io/shaka-packager/html/tutorials/widevine.html#widevine-test-credential
+            Befor start, go to https://docs.unified-streaming.com/tutorials/drm/widevine.html#getting-the-drm-configuration-information-from-the-widevine-la-test-server
+
+            ./bin/cli tool widevine:gen \
+             --track HD \
+             --drm-type WIDEVINE \
+             BB825C33F2424D6CB68505CB18D79DA
+
+            status:  OK
+            drm:  [{WIDEVINE edef8ba979d64acea3c827dcd51d21ed}]
+            Track # 1
+            key:  l1EhzqjvlPQ3p8/cwpRw/w==
+            key_id:  9mZ/RuQ9VeW0qQdQrRyyIA==
+            type:  HD
+            drm_type:  WIDEVINE
+            data:  IiBCQjgyNUMzM0YyNDI0RDZDQjY4NTA1Q0IxOEQ3OURBQ0jj3JWbBg==
+            already_used:  false
 
             see https://www.bento4.com/developers/dash/encryption_and_drm/#widevine-drm
 
             echo "Encrypting video and Bundling MDP file (Widevine)..." && \
             rm -Rf o/widevine-0 && mp4dash -v -d --widevine \
-            --encryption-key=171E7392D6CF4755986FA11330659179:6C37D30C881B1AE79F44C0B25715AF36:random \
+            --encryption-key=ab49cf88289c586ca33a821589a0aeac:d5e0d3a8251917007e782e27b59431c6:random \
             --use-segment-timeline \
-            --profiles='on-demand' \
             --encryption-cenc-scheme=cenc \
-            --widevine-header provider:elacity_drm#content_id:2a \
+            --widevine-header provider:widevine_test#content_id:7C100E91DF654FAA8226396D86E76B85 \
             --encryption-args="--global-option mpeg-cenc.eme-pssh:true --global-option mpeg-cenc.piff-compatible:true" \
             -o o/widevine-0 f/test-video-2sec.mp4
             
             */
             const protData = {
-                // <dashif:Authzurl>https://example.com/tenants/5341/authorize</dashif:Authzurl>
-                // <dashif:Laurl>http://localhost:8090/acquirelicense</dashif:Laurl>
                 "com.widevine.alpha": {
-                    // "serverURL": "http://localhost:8090/acquirelicense",
-                    "serverURL": "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+                    "serverURL": "http://localhost:8090/acquirelicense/widevine",
                     "httpRequestHeaders": {
-                        //"X-AxDRM-Message": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImZpcnN0X3BsYXlfZXhwaXJhdGlvbiI6NjAsInBsYXlyZWFkeSI6eyJyZWFsX3RpbWVfZXhwaXJhdGlvbiI6dHJ1ZX0sImtleXMiOlt7ImlkIjoiOWViNDA1MGQtZTQ0Yi00ODAyLTkzMmUtMjdkNzUwODNlMjY2IiwiZW5jcnlwdGVkX2tleSI6ImxLM09qSExZVzI0Y3Iya3RSNzRmbnc9PSJ9XX19.FAbIiPxX8BHi9RwfzD7Yn-wugU19ghrkBFKsaCPrZmU"
                         "X-AxDRM-Message": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsImZpcnN0X3BsYXlfZXhwaXJhdGlvbiI6NjAsInBsYXlyZWFkeSI6eyJyZWFsX3RpbWVfZXhwaXJhdGlvbiI6dHJ1ZX0sImtleXMiOlt7ImlkIjoiOWViNDA1MGQtZTQ0Yi00ODAyLTkzMmUtMjdkNzUwODNlMjY2IiwiZW5jcnlwdGVkX2tleSI6ImxLM09qSExZVzI0Y3Iya3RSNzRmbnc9PSJ9XX19.FAbIiPxX8BHi9RwfzD7Yn-wugU19ghrkBFKsaCPrZmU"
                     },
-                    // "audioRobustness": "SW_SECURE_CRYPTO",
-                    // "videoRobustness": "HW_SECURE_ALL",
                     "priority": 0
                 },
             };
@@ -364,8 +369,8 @@
                 return Promise.resolve();
             }            
 
-            //initWithProtection(html5video, url, protData, { filterLicenseRequest, filterLicenseResponse });
-            initWithProtection(html5video, "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd", protData, { filterLicenseRequest, filterLicenseResponse });
+            initWithProtection(html5video, url, protData, { filterLicenseRequest, filterLicenseResponse });
+            // initWithProtection(html5video, "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd", protData, { filterLicenseRequest, filterLicenseResponse });
         }
         function check() {
             if (location.protocol === 'http:' && location.hostname !== 'localhost') {
@@ -377,6 +382,5 @@
             }
         }
         (function(){document.body.onload = function(){check(); initWidevine0()}})()
-        //(function(){document.body.onload = function(){check(); initClearKey3()}})()
     </script>
 </html>
